@@ -1,0 +1,10 @@
+bin/
+include/
+lib/
+share/
+__pycache__/
+categorias/__pycache__/
+plugins/__pycache__/
+discord.log
+pyvenv.cfg
+.env
