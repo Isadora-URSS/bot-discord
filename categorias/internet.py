@@ -1043,7 +1043,7 @@ class internet(
         await ctx.send_help("spotify")
     
     @spotify.command(
-        name = "usuario"
+        name = "usuario",
         aliases = ("u", "ouvindo", "usuário"),
         brief = "Mostra o que alguém está ouvindo agora",
         extras = {"membro": "Id ou menção do membro para ver o que está ouvindo",
