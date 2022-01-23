@@ -4,6 +4,7 @@ import mal #upm package(mal-api)
 from dateutil.parser import isoparse as dt_parse #upm package(python-dateutil)
 import pytz
 from plugins.variaveis import CooldownEspecial
+from plugins.paginador import PaginadorExt, FonteUrban, FonteMALAnime, FonteMALManga, FonteReddit, FonteTwitter, FonteSpotify
 
 from datetime import datetime, timedelta
 from urllib.parse import quote
@@ -56,22 +57,9 @@ class internet(
                         text = f"urbandictionary.com",
                         icon_url = "https://cdn.discordapp.com/attachments/803443536363913236/827156974650916874/1617279952253.png"
                     ))
-                lista_embeds = []
-                for resultado in resultados:
-                    embed = discord.Embed(
-                        title = f"Exibindo resultados para pesquisa de **{termo}**",
-                        description = f"> Definição:\n{resultado['definition']}\n> Exemplos:\n{resultado['example']}\n"\
-                        f"> Outras informações:\nAutor: {resultado['author']}\nLink: {resultado['permalink']}\n"\
-                        f"{resultado['thumbs_up']} \U0001f44d | {resultado['thumbs_down']} \U0001f44e",
-                        color = 0x134FE6,
-                        timestamp = dt_parse(resultado["written_on"])
-                    ).set_footer(
-                        text = f"urbandictionary.com | Publicado em",
-                        icon_url = "https://cdn.discordapp.com/attachments/803443536363913236/827156974650916874/1617279952253.png"
-                    )
-                    lista_embeds.append(embed)
-                paginador = self.bot.paginador(lista_embeds, 150, ctx)
-                await paginador.começar()
+                fonte = FonteUrban(resultados, per_page = 1)
+                paginador = PaginadorExt(fonte, 90)
+                await paginador.começar(ctx)
             else:
                 texto = await resposta.text()
                 await ctx.send(embed = discord.Embed(
@@ -89,10 +77,10 @@ class internet(
         extras = {"tags": "As tags do hentai :Trollface:",
                   "exemplos": ("furry", "furry futanari")}
     )
-    @commands.is_nsfw()
-    @commands.has_permissions(administrator = True)
-    @commands.bot_has_permissions(embed_links = True)
-    @commands.max_concurrency(2, commands.BucketType.user)
+    @commands.is_nsfw()                                         #Não funciona no repl.it.
+    @commands.has_permissions(administrator = True)             #Motivo: fodasse não
+    @commands.bot_has_permissions(embed_links = True)           #atualizaram os certificado
+    @commands.max_concurrency(2, commands.BucketType.user)      #ssl kkkkkkkkkj
     async def rule34(self, ctx, *,tags):
         """Faz a pesquisa de um hentai no site rule34.xxx. Caso duas tags ou mais sejam inseridas, os resultados mostrarão hentais que contenham as duas tags. 
         Comando adicionado para fins de pesquisa, não veja pornografia. O vicio pode destruir sua vida. [Leia mais sobre isso aqui](https://www.yourbrainonporn.com/miscellaneous-resources/start-here-evolution-has-not-prepared-your-brain-for-todays-porn/)"""
@@ -178,24 +166,9 @@ class internet(
                 icon_url = "https://cdn.discordapp.com/attachments/803443536363913236/827631401934913536/MyAnimeList_Logo.png"
             ))
         else:
-            lista_embeds = []
-            for anime in pesquisa.results:
-                embed = discord.Embed(
-                    title = f"Anime {anime.title}",
-                    description = f"> Sinopse\n{(anime.synopsis if len(anime.synopsis)<1500 else anime.synopsis[0:1499]+'...')}\n"\
-                    f"> Informações\nNúmero de episodios: {anime.episodes}\nPontuação: {anime.score}\nID: {anime.mal_id}\nTipo: {anime.type}",
-                    color = 0x2E51A2,
-                    timestamp = discord.utils.utcnow(),
-                    url = anime.url
-                ).set_thumbnail(
-                    url = anime.image_url
-                ).set_footer(
-                    text = f"myanimelist.net",
-                    icon_url = "https://cdn.discordapp.com/attachments/803443536363913236/827631401934913536/MyAnimeList_Logo.png"
-                )
-                lista_embeds.append(embed)
-            paginador = self.bot.paginador(lista_embeds, 210, ctx)
-            await paginador.começar()
+            fonte = FonteMALAnime(pesquisa.results, per_page = 1)
+            paginador = PaginadorExt(fonte, 150)
+            await paginador.começar(ctx)
         
     @myanimelist.command(
         aliases = ("ai", "ainfo", "anime", "a"),
@@ -267,23 +240,9 @@ class internet(
                 icon_url = "https://cdn.discordapp.com/attachments/803443536363913236/827631401934913536/MyAnimeList_Logo.png"
             ))
         else:
-            lista_embeds = []
-            for manga in pesquisa.results:
-                embed = discord.Embed(
-                    title = f"Mangá {manga.title}",
-                    description = f"> Sinopse:\n{manga.synopsis}\n> Informações:\nNúmero de volumes: {manga.volumes}\n"\
-                    f"Pontuação: {manga.score}\nID: {manga.mal_id}\nTipo: {manga.type}",
-                    timestamp = discord.utils.utcnow(),
-                    url = manga.url
-                ).set_thumbnail(
-                    url = manga.image_url
-                ).set_footer(
-                    text = f"myanimelist.net",
-                    icon_url = "https://cdn.discordapp.com/attachments/803443536363913236/827631401934913536/MyAnimeList_Logo.png"
-                )
-                lista_embeds.append(embed)
-            paginador = self.bot.paginador(lista_embeds, 150, ctx)
-            await paginador.começar()
+            fonte = FonteMALManga(pesquisa.results, per_page = 1)
+            paginador = PaginadorExt(fonte, 150)
+            await paginador.começar(ctx)
     
     @myanimelist.command(
         aliases = ("mangainfo", "mangá", "manga", "mangai", "mangái"),
@@ -328,106 +287,6 @@ class internet(
                 icon_url = "https://cdn.discordapp.com/attachments/803443536363913236/827631401934913536/MyAnimeList_Logo.png"
             )
             await ctx.send(embed=embed, view = ViewLink(manga.url, "Abrir no MAL"))
-    
-    def retornar_embed_reddit(self, post):
-        """Retorna um embed do Discord usando as informações da API aberta do Reddit."""
-        descrição = f"**Título**: {post['title']}\n"
-        if post['selftext'] != '':
-            if len(post['selftext']) < 3500:
-                descrição += html.unescape(f"**Conteúdo**: {post['selftext']}\n")
-            else:
-                descrição += html.unescape(f"**Conteúdo**: {post['selftext'][0:3499]}... **[Post cortado]**\n")
-        descrição += f"\n{post['ups']} \u2b06\ufe0f | {post['downs']} \u2b07\ufe0f | {post['num_comments']} \U0001f4ac\n[Pule para o post]({'https://www.reddit.com'+post['permalink']})"
-        embed = discord.Embed(
-            title = f"Post por **{post['author']}** em **{post['subreddit_name_prefixed']}**",
-            description = descrição,
-            color = 0xff4500,
-            timestamp = pytz.utc.localize(datetime.utcfromtimestamp(int(post['created'])))
-        )
-        if 'author_flair_type' in post and post['author_flair_type'] == "richtext":
-            link_flair_autor = discord.Embed.Empty
-            if 'u' in post["author_flair_richtext"][0]:
-                link_flair_autor = post["author_flair_richtext"][0]["u"]
-            embed.set_author(
-                name = post['author_flair_text'],
-                icon_url = link_flair_autor
-            )
-        if post['link_flair_type'] == "richtext":
-            embed.add_field(
-                name = "Categoria",
-                value = post['link_flair_text']
-            )
-            if post['link_flair_background_color'] != '':
-                embed.color = int(post['link_flair_background_color'].replace('#', '0x'), base = 16)
-        if "post_hint" in post:
-            if post["post_hint"] == 'image':
-                if post['url'] != 'spoiler':
-                    embed.add_field(
-                        name = "Mídias",
-                        value = f"Existe uma imagem anexada ao post."
-                    ).set_image(
-                        url = post['url']
-                    )
-                else:
-                    embed.add_field(
-                        name = f"Mídias",
-                        value = f"Existe uma imagem marcada como **spoiler** no post."
-                    )
-            elif post['post_hint'] == 'hosted:video':
-                embed.add_field(
-                    name = "Mídias",
-                    value = f"Existe um [video]({post['media']['reddit_video']['fallback_url']}) anexado ao post."
-                ).set_image(
-                    url = post['preview']['images'][0]['source']['url'].replace("&amp;", "&")
-                )
-            elif post['post_hint'] == "rich:video":
-                if post['media']['type'] == 'gfycat.com':
-                    link_embedly = post['media']['oembed']['thumbnail_url'].replace("https://i.embed.ly/1/image?url=", "")
-                    link_gif = link_embedly.split("&")[0].replace("%2F", "/").replace("%3A", ":")
-                    embed.add_field(
-                        name = "Mídias",
-                        value = f"Existe um [gif do Gyfcat]({post['url']}) anexado ao post."
-                    ).set_image(
-                        url = link_gif
-                    )
-                elif post['media']['type'] == 'redgifs.com':
-                    embed.add_field(
-                        name = "Mídias",
-                        value = f"Existe um gif do RedGifs no post. Ele **não** será exibido pois o bot não suporta gifs pornográficos."
-                    )
-                elif post['media']['type'] == 'youtube.com':
-                    embed.add_field(
-                        name = "Mídias",
-                        value = f"Existe um [vídeo do Youtube]({post['url']}) anexado ao post."
-                    ).set_image(
-                        url = post['secure_media']['oembed']['thumbnail_url']
-                    )
-            elif post['post_hint'] == 'link':
-                if post['domain'] == 'i.imgur.com':
-                    embed.add_field(
-                        name = "Mídias",
-                        value = f"Existe um gif do Imgur anexado ao post."
-                    ).set_image(
-                        url = post['url'].replace("gifv", "gif")
-                    )
-                elif 'crosspost_parent' in post:
-                    embed.description += f"\nEsse post é um crosspost. [Link do post original]({'https://www.reddit.com'+post['crosspost_parent_list'][0]['permalink']})."
-        elif "is_gallery" in post and post['is_gallery']:
-            embed.add_field(
-                name = "Mídias",
-                value = f"Esse post contem uma galeria com [{len(post['gallery_data']['items'])} imagens]({post['url']})."
-            ).set_image(
-                url = post['media_metadata'][post['gallery_data']['items'][0]['media_id']]['p'][0]['u'].replace("preview", "i").split('?')[0]
-            )
-        elif 'poll_data' in post:
-            opções = ''
-            for opção in post['poll_data']['options']:
-                opções += f"\nOpção {post['poll_data']['options'].index(opção)+1}: **{opção['text']}**"
-            embed.add_field(
-                name = "Enquete",
-                value = f"Número total de votos: {post['poll_data']['total_vote_count']}" + opções
-            )
-        return embed
     
     @commands.group(
         invoke_without_command = True,
@@ -648,25 +507,9 @@ class internet(
                         icon_url = "https://media.discordapp.net/attachments/803443536363913236/870861792312709140/reddit_logo.png"
                     ))
                 else:
-                    lista_posts = json['data']['children']
-                    lista_embeds = []
-                    for post in lista_posts:
-                        dados_post = post["data"]
-                        if dados_post['over_18'] == True and not ctx.channel.is_nsfw():
-                            embed = discord.Embed(
-                                title = f"Post NSFW",
-                                description = f"Esse post foi marcado como NSFW e só pode ser visto nesse tipo de canal.",
-                                color = 0xff0000,
-                                timestamp = pytz.utc.localize(datetime.utcfromtimestamp(int(dados_post['created'])))
-                            ).set_footer(
-                                text = f"reddit.com",
-                                icon_url = "https://media.discordapp.net/attachments/803443536363913236/870861792312709140/reddit_logo.png"
-                            )
-                        else:
-                            embed = self.retornar_embed_reddit(dados_post)           
-                        lista_embeds.append(embed)
-                    paginador = self.bot.paginador(lista_embeds, 240, ctx)
-                    await paginador.começar()
+                    fonte = FonteReddit(json["data"]["children"], per_page = 1)
+                    paginador = PaginadorExt(fonte, 240)
+                    await paginador.começar(ctx)
             else:
                 texto = await resposta.text()
                 await ctx.send(embed = discord.Embed(
@@ -725,13 +568,9 @@ class internet(
                         icon_url = "https://media.discordapp.net/attachments/803443536363913236/870861792312709140/reddit_logo.png"
                     ))
                 else:
-                    lista_posts = json['data']['children']
-                    lista_embeds = []
-                    for post in lista_posts:
-                        embed = self.retornar_embed_reddit(post['data'])
-                        lista_embeds.append(embed)
-                    paginador = self.bot.paginador(lista_embeds, 240, ctx)
-                    await paginador.começar()
+                    fonte = FonteReddit(json["data"]["children"], per_page = 1)
+                    paginador = PaginadorExt(fonte, 240)
+                    await paginador.começar(ctx)
             else:
                 texto = await resposta.text()
                 await ctx.send(embed = discord.Embed(
@@ -743,104 +582,6 @@ class internet(
                     text = f"reddit.com",
                     icon_url = "https://media.discordapp.net/attachments/803443536363913236/870861792312709140/reddit_logo.png"
                 ))
-    
-    def retornar_embed_twitter(self, post, anexos):
-        autor = "Não foi possivel conseguir o nome do autor"
-        for usuario in anexos['users']:
-            if usuario['id'] == post['author_id']:
-                autor = usuario['name']
-        embed = discord.Embed(
-            title = f"Exibindo tweet de **@{autor}**",
-            description = "\"" + post['text'] + "\"",
-            color = 0x57c7FF,
-            timestamp = dt_parse(post['created_at'])
-        ).add_field(
-            name = "Informações do Tweet",
-            value = f"Postado de \"{post['source']}\"\nID: {post['id']}\n\u2764\ufe0f {post['public_metrics']['like_count']} | \U0001f4ac {post['public_metrics']['reply_count']} | \U0001f5ef\ufe0f {post['public_metrics']['quote_count']} | \U0001f501 {post['public_metrics']['retweet_count']}",
-            inline = False
-        ).set_footer(
-            text = "twitter.com | Tweet feito em",
-            icon_url = "https://media.discordapp.net/attachments/803443536363913236/874767316108341258/580b57fcd9996e24bc43c53e.png"
-        )
-        if 'referenced_tweets' in post:
-            for tweet_referenciado in post['referenced_tweets']:
-                if tweet_referenciado['type'] == 'replied_to':
-                    id_tweet = tweet_referenciado['id']
-                    if anexos.get('tweets'):
-                        for tweet in anexos['tweets']:
-                            if tweet['id'] == id_tweet:
-                                nome_autor_referenciado = "(Não foi possível obter o nome do autor)"
-                                for usuario in anexos['users']:
-                                    if usuario['id'] == tweet['author_id']:
-                                        nome_autor_referenciado = usuario['name']
-                                        break
-                                embed.add_field(
-                                    name = "Resposta",
-                                    value = f"Esse tweet responde a um tweet postado originalmente por {nome_autor_referenciado}.\n**Conteúdo**: \"{tweet['text']}\""
-                                )
-                                break
-                        else:
-                            embed.add_field(
-                                name = "Resposta",
-                                value = "Esse tweet responde a outro tweet, mas o autor privou seu perfil então ele não será exibido aqui."
-                            )
-                    else:
-                        embed.add_field(
-                            name = "Resposta",
-                            value = "Esse tweet responde a outro tweet, mas o autor privou seu perfil então ele não será exibido aqui."
-                        )
-        if 'attachments' in post:
-            if 'media_keys' in post['attachments']:
-                id_midia = post['attachments']['media_keys'][0]
-                for midia in anexos['media']:
-                    if midia['media_key'] == id_midia:
-                        if midia['type'] == 'photo':
-                            embed.set_image(
-                                url = midia['url']
-                            ).add_field(
-                                name = "Anexos",
-                                value =  f"Tipo de mídia anexada: Imagem\nNúmero de mídias: {len(post['attachments']['media_keys'])}",
-                                inline = False
-                            )
-                            break
-                        elif midia['type'] == 'video':
-                            embed.set_image(
-                                url = midia['preview_image_url']
-                            ).add_field(
-                                name = "Anexos",
-                                value = "Tipo de mídia anexada: Vídeo (exibindo thumbnail)",
-                                inline = False
-                            )
-                            break
-                        elif midia['type'] == 'animated_gif':
-                            embed.set_image(
-                                url = midia['preview_image_url']
-                            ).add_field(
-                                name = "Anexos",
-                                value = "Tipo de mídia anexada: Gif (Exibindo thumbnail)",
-                                inline = False
-                            )
-                            break
-            elif 'poll_ids' in post['attachments']:
-                id_enquete = post['attachments']['poll_ids'][0]
-                for enquete in anexos['polls']:
-                    if enquete['id'] == id_enquete:
-                        enquete['options'].sort(key = lambda e: str(e['position']))
-                        embed.add_field(
-                            name = "Enquete",
-                            value = f"Termina em: {enquete['end_datetime'].replace('-', '/').replace('T', '  ')}",
-                            inline = False
-                        ).add_field(
-                            name = "Opções",
-                            value = "\n".join([infos['label'] for infos in enquete['options']]),
-                            inline = True
-                        ).add_field(
-                            name = "Votos",
-                            value = "\n".join([str(infos['votes']) for infos in enquete['options']]),
-                            inline = True
-                        )
-                        break
-        return embed
     
     @commands.group(
         invoke_without_command= True,
@@ -998,23 +739,10 @@ class internet(
                         icon_url = "https://media.discordapp.net/attachments/803443536363913236/874767316108341258/580b57fcd9996e24bc43c53e.png"
                     ))
                 else:
-                    lista_embeds= []
-                    for post in json['data']:
-                        if post["possibly_sensitive"] and not ctx.channel.is_nsfw():
-                            embed = discord.Embed(
-                                title = "Tweet NSFW",
-                                description = "Esse tweet é NSFW e só pode ser visto em canais apropriados.",
-                                color = 0x57C7FF,
-                                timestamp = discord.utils.utcnow()
-                            ).set_footer(
-                                text = "twitter.com",
-                                icon_url = "https://media.discordapp.net/attachments/803443536363913236/874767316108341258/580b57fcd9996e24bc43c53e.png"
-                            )
-                        else:
-                            embed = self.retornar_embed_twitter(post, json['includes'])
-                        lista_embeds.append(embed)
-                    paginador = self.bot.paginador(lista_embeds, 210, ctx)
-                    await paginador.começar()
+                    fonte = FonteTwitter(json["data"], per_page = 1)
+                    fonte.adicionar_anexos(json["includes"])
+                    paginador = PaginadorExt(fonte, 150)
+                    await paginador.começar(ctx)
             else:
                 texto = await resposta.text()
                 if len(texto) > 3000:
@@ -1122,35 +850,10 @@ class internet(
                         icon_url = "https://media.discordapp.net/attachments/803443536363913236/897683078321930261/2048px-Spotify_logo_without_text.svg.png"
                     ))
                 else:
-                    lista_embeds = []
-                    json = await resposta.json()
-                    for resultado in json['tracks']['items']:
-                        descrição = f"**Artista**: {', '.join([('[' + artista['name'] + '](' + artista['external_urls']['spotify'] + ')') for artista in resultado['artists']])}\n"
-                        segundos, milisegundos = divmod(resultado['duration_ms'], 1000)
-                        minutos, segundos = divmod(segundos, 60)
-                        descrição += f"**Duração**: {minutos:02}:{segundos:02}\n**Popularidade**: {resultado['popularity']}/100\n"\
-                        f"**Posição**: {resultado['track_number']}/{resultado['album']['total_tracks']}\n**Disco**: {resultado['disc_number']}"\
-                        f"\n[Abra no Spotify]({resultado['external_urls']['spotify']})"
-                        embed = discord.Embed(
-                            title = resultado['name'],
-                            description = descrição,
-                            color = 0x1db954,
-                            timestamp = discord.utils.utcnow()
-                        ).add_field(
-                            name = "Informações do álbum",
-                            value = f"**Nome**: [{resultado['album']['name']}]({resultado['album']['external_urls']['spotify']})"\
-                            f"\n**Tipo**: {resultado['album']['album_type']}\n"\
-                            f"**Data de lançamento**: {resultado['album']['release_date']}\n"\
-                            f"**Artista**: {', '.join(artista['name'] for artista in resultado['album']['artists'])}"
-                        ).set_image(
-                            url = resultado['album']['images'][0]['url']
-                        ).set_footer(
-                            text = f"Spotify.com",
-                            icon_url = "https://media.discordapp.net/attachments/803443536363913236/897683078321930261/2048px-Spotify_logo_without_text.svg.png"
-                        )
-                        lista_embeds.append(embed)
-                    paginador = self.bot.paginador(lista_embeds, 90, ctx)
-                    await paginador.começar()
+                    fonte = FonteSpotify(json["tracks"]["items"], per_page = 1)
+                    fonte.escolher_metodo("musica")
+                    paginador = PaginadorExt(fonte, 90)
+                    await paginador.começar(ctx)
             else:
                 await ctx.send(embed = discord.Embed(
                     title = f"Erro desconhecido!",
