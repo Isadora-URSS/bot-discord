@@ -162,12 +162,12 @@ class desenvolvimento(
     async def botban(self, ctx, usuario):
         """Impede alguém de usar o bot"""
         infos = await self.bot.database.botinfos.find_one({})
-        if alvo.id in infos["banidos"]:
+        if usuario.id in infos["banidos"]:
             await ctx.message.add_reaction("\u274c")
         else:
             await self.bot.database.botinfos.update_one(
                 {},
-                {"$push": {"banidos": alvo.id}}
+                {"$push": {"banidos": usuario.id}}
             )
             self.bot.cache[0] = await self.bot.database.botinfos.find_one({})
             await ctx.message.add_reaction("\u2714\ufe0f")
@@ -182,12 +182,12 @@ class desenvolvimento(
     async def botunban(self, ctx, usuario):
         """Desimpede alguém de usar o bot"""
         infos = await self.bot.database.botinfos.find_one({})
-        if alvo.id not in infos["banidos"]:
+        if usuario.id not in infos["banidos"]:
             await ctx.message.add_reaction("\u274c")
         else:
             await self.bot.database.botinfos.update_one(
                 {},
-                {"$pull": {"banidos": alvo.id}}
+                {"$pull": {"banidos": usuario.id}}
             )
             self.bot.cache[0] = await self.bot.database.botinfos.find_one({})
             await ctx.message.add_reaction("\u2714\ufe0f")
