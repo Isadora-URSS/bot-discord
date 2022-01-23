@@ -1,6 +1,6 @@
 import discord
 from discord.ext import commands
-from motor.motor_asyncio import AsyncIOMotorClient
+from motor.motor_asyncio import AsyncIOMotorClient #upm package('motor')
 from dotenv import load_dotenv
 import aiohttp
 from plugins.variaveis import Banido, TempoInvalido, CanalDesativado
