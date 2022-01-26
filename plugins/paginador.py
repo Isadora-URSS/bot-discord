@@ -224,6 +224,15 @@ class PaginadorExt(discord.ui.View, menus.MenuPages):
     async def parar(self, botão, interação):
         await self.on_timeout()
 
+    def adicionar_itens(self):
+        """Para quando for preciso reordenar os botões. Isso adiciona todos os seis presentes na paginação."""
+        self.add_item(self.retornar_ao_inicio)
+        self.add_item(self.retroceder)
+        self.add_item(self.atual)
+        self.add_item(self.avançar)
+        self.add_item(self.pular_pro_final)
+        self.add_item(self.parar)
+    
     async def on_timeout(self):
         """dá um fim em tudo"""
         self.clear_items()

@@ -1,12 +1,104 @@
 import discord
-from discord.ext import commands
-from plugins.paginador import PaginadorMenu
+from discord.ext import commands, menus
+from plugins.paginador import PaginadorMenu, PaginadorExt
 from plugins.variaveis import CooldownEspecial
 
 import os
 import sys
 
-# Comentado por motivos de: Lógica confusa que não consigo melhorar # Ta mais bacana agr sla
+class BotãoGrupo(discord.ui.Button):
+    def __init__(self, grupo, ajuda):
+        super().__init__(style = discord.ButtonStyle.blurple, label = "Ver subcomandos")
+        self.grupo = grupo
+        self.ajuda = ajuda
+
+    async def callback(self, interação):
+        lista_subcomandos = list(filter(lambda c: not c.hidden, self.grupo.commands))
+        lista_embeds = [await self.ajuda.embed_comando(c) for c in lista_subcomandos]
+        await interação.response.send_message(embeds = lista_embeds, ephemeral = True)
+
+class FonteAjuda(menus.ListPageSource):
+    adicionou_botão = False
+    async def format_page(self, menu, item):
+        if self.adicionou_botão:
+            menu.remove_item(self.botão)
+            self.adicionou_botão = False
+        if item is None:
+            assert self.entries[0] is None
+            lista_categorias = self.entries.copy()
+            lista_categorias.pop(0)
+            embed = discord.Embed(               
+                title = "LOCOMOTIVE BOT - Ajuda",
+                description = f"[Suporte]({os.getenv('link_suporte')}) - {os.getenv('bot_dev')} - [Convite do bot]({os.getenv('link_convite')})",
+                timestamp = menu.ajuda.timestamp
+            ).set_author(
+                name = menu.ajuda.autor,
+                icon_url = menu.ajuda.autor.avatar.url
+            ).add_field(
+                name = f"Informações do sistema",
+                value = f"```\nPython {sys.version}\nDiscord.py {discord.__version__}\n```",
+                inline = False
+            ).add_field(
+                name = "Categorias",
+                value = "\n".join([f"{categoria.qualified_name} {categoria.emoji} - {len(categoria.get_commands())} comandos" for categoria in lista_categorias]),
+                inline = False
+            ).set_footer(
+                text = f"Para mais informações em um comando, use {menu.ajuda.invoked_with} <comando>"
+            )
+            return embed
+        elif isinstance(item, commands.Cog):
+            return await menu.ajuda.embed_categoria(item)
+        elif isinstance(item, commands.Group):
+            lista_subcomandos = list(filter(lambda c: not c.hidden, item.commands))
+            if len(lista_subcomandos) > 0 and len(lista_subcomandos) < 11:
+                self.botão = BotãoGrupo(item, menu.ajuda)
+                menu.add_item(self.botão)
+                self.adicionou_botão = True               
+            return await menu.ajuda.embed_comando(item)
+        elif isinstance(item, commands.Command):
+            return await menu.ajuda.embed_comando(item)
+    
+class SeleçãoAjuda(discord.ui.Select):
+    def __init__(self, listas):
+        super().__init__(
+            placeholder = "Selecione uma categoria...",
+            min_values = 1,
+            max_values = 1,
+            row = 0
+        )
+        self.listas = listas
+        for categoria in listas[0]:
+            self.add_option(
+                label = getattr(categoria, "qualified_name", "Sumario"),
+                value = getattr(categoria, "qualified_name", "Sumario"),
+                description = getattr(categoria, "description", "Sumario com a visão geral do bot e de cada categoria."),
+                emoji = getattr(categoria, "emoji", "\U0001f44b")
+            )
+
+    async def callback(self, interação):
+        escolhida = self.values[0]
+        categoria = self.view.ctx.bot.get_cog(escolhida) # Obtem o objeto de categoria
+        numero = self.listas[0].index(categoria)
+        fonte = FonteAjuda(self.listas[numero], per_page = 1)
+        await self.view.mudar_fonte(fonte)
+        
+class PaginadorAjuda(PaginadorExt):
+    def __init__(self, formatador, timeout, cog_ajuda):
+        super().__init__(formatador, timeout)
+        self.ajuda = cog_ajuda
+
+    def adicionar_menu(self, menu_seleção):
+        self.clear_items()
+        self.add_item(menu_seleção)
+        self.adicionar_itens()
+        self.remove_item(self.parar)
+
+    async def mudar_fonte(self, fonte):
+        if self._source.adicionou_botão:
+            self.remove_item(self._source.botão)
+        await fonte._prepare_once()
+        self._source = fonte
+        await self.show_page(0)
 
 atributos = {
     "name": "ajuda",
@@ -16,32 +108,6 @@ atributos = {
     "extras": {"command": "O comando ou categoria para ver informações.", "exemplos": ("hakidorei", "Configurações")},
     "cooldown": commands.DynamicCooldownMapping(CooldownEspecial(3, 40), commands.BucketType.user)
 }
-
-class seleção(discord.ui.Select):
-    """Classe que representa o menu expandivel com a lista de categorias"""
-    def __init__(self, dict_categorias):
-        super().__init__(
-                placeholder = "Selecione uma categoria...",
-                min_values = 1,
-                max_values = 1,
-                row = 0
-            )
-        self.dict_categorias = dict_categorias
-        for categoria in dict_categorias:
-            """Adiciona opções baseadas na lista de categorias (dict)"""
-            self.add_option(
-                label = getattr(categoria, "qualified_name", "Sumario"),
-                value = getattr(categoria, "qualified_name", "Sumario"),
-                description = getattr(categoria, "description", "Sumario com a visão geral do bot e de cada categoria."),
-                emoji = getattr(categoria, "emoji", "\U0001f44b")
-            )
-        
-    async def callback(self, interação):
-        escolhida = self.values[0]
-        categoria = self.view.ctx.bot.get_cog(escolhida) # Obtem o objeto de categoria
-        self.view.lista_embeds = self.dict_categorias[categoria] # # Obtem a respectiva lista de embeds e muda a lista controlada pelos botṍes
-        self.view.posição = 0 # Muda a posição para o primeiro embed por padrão
-        await self.view.mostrar_pagina(interação) # Chama o metodo master para mudar paginas
 
 class ajuda(commands.HelpCommand):
     def __init__(self):
@@ -61,6 +127,19 @@ class ajuda(commands.HelpCommand):
         self.timestamp = discord.utils.utcnow()
         self.paginador = ctx.bot.paginador
         self.paginadorAjuda = PaginadorMenu
+
+    async def embed_categoria(self, categoria):
+        lista_comandos = tuple(filter(lambda c: not c.hidden, categoria.get_commands()))
+        descrições = "\n".join([self.resumo_comando(c) for c in lista_comandos])
+        embed = discord.Embed(
+            title = f"Exibindo categoria **{categoria.qualified_name} {categoria.emoji}**",
+            description = f"{categoria.description}\n\n__**Lista de Comandos**__\n{descrições}",
+            timestamp = self.timestamp
+        ).set_author(
+            name = self.autor,
+            icon_url = self.autor.avatar.url
+        )
+        return embed
     
     async def embed_comando(self, comando):
         try:
@@ -118,10 +197,12 @@ class ajuda(commands.HelpCommand):
                 inline = False
             )
         if isinstance(comando, commands.Group):
-            embed.add_field(
-                name = "__Subcomandos__",
-                value = "\n".join([subcomando.full_parent_name + " " + subcomando.name for subcomando in filter(lambda c: not c.hidden, comando.commands)])
-            )
+            lista_subcomandos = list(filter(lambda c: not c.hidden, comando.commands))
+            if bool(len(lista_subcomandos)):
+                embed.add_field(
+                    name = "__Subcomandos__",
+                    value = "\n".join([subcomando.full_parent_name + " " + subcomando.name for subcomando in lista_subcomandos])
+                )
         return embed
     
     def resumo_comando(self, comando):
@@ -131,85 +212,35 @@ class ajuda(commands.HelpCommand):
         return resumo
     
     async def send_bot_help(self, mapa_comandos):
-        """------------------Essa função é relativamente simples, mas me gera confusão.------------------
-        O objeto final passado para o paginador será uma lista de embeds e para o menu sera um dicionario
-        contendo listas de embeds. Para isso, a lista e o dict são criados. Na iteração das categorias, o
-        dicionario é incrementado com a categoria e seus embeds, e a lista principal é incrementada com o
-        embed da categoria. Ao fim, o embed de súmario é construído e inserido na lista. A lista então  é
-        inserida no dict com chave None, e os dois objetos desejados estão prontos."""
-        lista_embeds = [] # Lista que alimentará o paginador
-        dict_categorias = {} # dicionario de categorias -> lista de embeds relacionados a categoria
+        listas_cogs = [[None]]
         for categoria, lista_comandos in mapa_comandos.items():
             lista_comandos = tuple(filter(lambda c: not c.hidden, lista_comandos))
             if (not lista_comandos) or (not categoria) or categoria.qualified_name == "Desenvolvimento":
-                """Retorna se a categoria não for mostrável"""
                 continue
-            descrições = "\n".join([self.resumo_comando(c) for c in lista_comandos]) # Faz uma lista de resumos (por algum motivo não pode ser feito na criação do embed)
-            embed = discord.Embed(
-                title = f"Exibindo categoria **{categoria.qualified_name} {categoria.emoji}**",
-                description = f"{categoria.description}\n\n__**Lista de Comandos**__\n{descrições}",
-                timestamp = self.timestamp
-            ).set_author(
-                name = self.autor,
-                icon_url = self.autor.avatar.url
-            )
-            lista_embeds.append(embed) # Coloca na lista de embeds
-            dict_categorias[categoria] = [await self.embed_comando(comando) for comando in lista_comandos]
-            dict_categorias[categoria].insert(0, embed)
-
-        embed = discord.Embed(               
-            title = "LOCOMOTIVE BOT - Ajuda",
-            description = f"[Suporte]({os.getenv('link_suporte')}) - {os.getenv('bot_dev')} - [Convite do bot]({os.getenv('link_convite')})",
-            timestamp = self.timestamp
-        ).set_author(
-            name = self.autor,
-            icon_url = self.autor.avatar.url
-        ).add_field(
-            name = f"Informações do sistema",
-            value = f"```\nPython {sys.version}\nDiscord.py {discord.__version__}\n```",
-            inline = False
-        ).add_field(
-            name = "Categorias",
-            value = "\n".join([f"{categoria.qualified_name} {categoria.emoji} - {len(categoria.get_commands())} comandos" for categoria in dict_categorias]),
-            inline = False
-        ).set_footer(
-            text = f"Para mais informações em um comando, use {self.invoked_with} <comando>"
-        )
-        lista_embeds.insert(0, embed) # Insere na lista de embeds
-        dict_categorias = {None: lista_embeds, **dict_categorias} # Insere no dicionario
-        menu = seleção(dict_categorias) # Cria o objeto do menu, usando o dict
-        paginador = self.paginadorAjuda(lista_embeds, 300, self.context, menu) # cria o objeto de paginação
-        await paginador.começar()
+            lista_comandos = [categoria, *lista_comandos]
+            listas_cogs.append(lista_comandos)
+            listas_cogs[0].append(categoria)
+        fonte = FonteAjuda(listas_cogs[0], per_page = 1)
+        menu = SeleçãoAjuda(listas_cogs)
+        paginador = PaginadorAjuda(fonte, 180, self)
+        paginador.adicionar_menu(menu)
+        await paginador.começar(self.context)
     
     async def send_cog_help(self, categoria):
         lista_comandos = tuple(filter(lambda c: not c.hidden, categoria.get_commands()))
         if not lista_comandos:
             return await self.send_error_message(self.command_not_found(categoria.qualified_name))
-        descrições = "\n".join([self.resumo_comando(c) for c in lista_comandos])
-        embed = discord.Embed(
-            title = f"Exibindo categoria **{categoria.qualified_name} {categoria.emoji}**",
-            description = f"{categoria.description}\n\n__**Lista de Comandos**__\n{descrições}",
-            timestamp = self.timestamp
-        ).set_author(
-            name = self.autor,
-            icon_url = self.autor.avatar.url
-        )
-        lista_embeds = [embed]
-        for comando in lista_comandos:
-            lista_embeds.append(await self.embed_comando(comando))
-        paginador = self.paginador(lista_embeds, 300, self.context)
-        await paginador.começar()
+        fonte = FonteAjuda([categoria, *lista_comandos], per_page = 1)
+        paginador = PaginadorAjuda(fonte, 120, self)
+        await paginador.começar(self.context)
     
     async def send_group_help(self, comando):
         lista_comandos = tuple(filter(lambda c: not c.hidden, comando.commands))
         if not lista_comandos:
             return await self.context.send(embed = await self.embed_comando(comando))
-        lista_embeds = []
-        lista_embeds.append(await self.embed_comando(comando))
-        for subcomando in lista_comandos:
-            lista_embeds.append(await self.embed_comando(subcomando))
-        paginador = self.paginador(lista_embeds, 300, self.context)
-        await paginador.começar()
+        fonte = FonteAjuda([comando, *lista_comandos], per_page = 1)
+        paginador = PaginadorAjuda(fonte, 90, self)
+        await paginador.começar(self.context)
     
     async def send_command_help(self, comando):
         await self.context.send(embed = await self.embed_comando(comando))
