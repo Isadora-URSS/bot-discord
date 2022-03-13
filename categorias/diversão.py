@@ -5,6 +5,7 @@ from plugins.variaveis import CooldownEspecial
 from urllib.parse import quote
 import random
 import asyncio
+from base64 import b64encode
 
 class botãojogodavelha(discord.ui.Button):
     def __init__(self, x, y):
@@ -412,6 +413,32 @@ class diversão(
         """Jogue genius/simon usando o bot."""
         genius = viewgenius(ctx)
         await genius.começar()
+
+    @commands.command(
+        brief = "Gera um token não real de um usuário",
+        extras = {"usuario": "A pessoa para atribuir o token falso",
+                  "exemplos": ("<@531508181654962197>", "531508181654962197")}
+    )
+    async def token(self, ctx, usuario: discord.Member = None):
+        """Gera um token não real de um usuário."""
+        usuario = usuario or ctx.author
+        string_id = str(usuario.id).encode(encoding = "utf-8")
+        timestamp = int(discord.utils.utcnow().timestamp()) - 1293840000
+        timestamp = timestamp.to_bytes((timestamp.bit_length() // 8) +  1, byteorder = "big")
+        chars = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890_-"
+        token = b64encode(string_id, altchars = b"_-") + b"." + b64encode(timestamp, altchars = b"_-") + b"." + bytes([random.choice(chars) for n in range(27)])
+        await ctx.send(f"O token de {usuario.mention} é {token.decode('utf-8')}".replace("=", ""))
+
+    @commands.command(
+        brief = "Gera um IP aleatório para alguém",
+        aliases = ("ip",),
+        extras = {"usuario": "A pessoa para atribuir o IP falso",
+                  "exemplos": ("<@531508181654962197>", "531508181654962197")}
+    )
+    async def dox(self, ctx, usuario: discord.Member = None):
+        """Gera um IP aleatório para alguém."""
+        usuario = usuario or ctx.author
+        await ctx.send(f"O IP de {usuario.mention} é {'.'.join([str(random.randint(0,255)) for i in range(4)])}")
     
 def setup(bot):
     bot.add_cog(diversão(bot))

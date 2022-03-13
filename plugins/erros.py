@@ -3,6 +3,8 @@ from discord.ext import commands
 from .variaveis import TempoInvalido, Banido, CanalDesativado
 import aiohttp
 
+import traceback
+
 class logerros(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -138,7 +140,20 @@ class logerros(commands.Cog):
                 numero_erro = botinfos["erro"]
                 descrição = f"Ocorreu um erro não esperado no bot (provavelmente não ligado ao usuário). O erro foi informado ao desenvolvedor do bot, com o código `{numero_erro}`.\n\n**Tipo de erro:** Erro desconhecido."
                 await self.bot.database.botinfos.update_one({}, {"$inc": {"erro": 1}})
-                await canal.send(f"Ocorreu um erro não esperado. Abaixo as informações:\n================================\nCódigo: **#{numero_erro}**\nId do servidor: {ctx.guild.id}\nId canal: {ctx.channel.id}\nAutor: {ctx.author} - {ctx.author.id}\nMensagem: {ctx.message.content[0:700]}\n================================\n{repr(error)}\n================================")
+                string_erro = ''.join(traceback.format_exception(type(error), error, error.__traceback__))
+                if len(string_erro) > 4085:
+                    string_erro = string_erro[-4085:]
+                embed = discord.Embed(
+                    title = f"Erro **#{numero_erro}**",
+                    description = f"```py\n{string_erro}\n```",
+                    timestamp = discord.utils.utcnow(),
+                    color = 0xFF0000
+                ).add_field(
+                    name = "Informações adicionais",
+                    value = f"Id do servidor: {ctx.guild.id}\nId canal: {ctx.channel.id}\nAutor: {ctx.author} - {ctx.author.id}\nMensagem: {ctx.message.content[0:120]}"
+                )
+                await canal.send(embed = embed)
+                #f"Ocorreu um erro não esperado. Abaixo as informações:\n================================\nCódigo: **#{numero_erro}**\nId do servidor: {ctx.guild.id}\nId canal: {ctx.channel.id}\nAutor: {ctx.author} - {ctx.author.id}\nMensagem: {ctx.message.content[0:700]}\n================================\n{repr(error)}\n================================")
         
         if not ctx.me.guild_permissions.embed_links:
             await ctx.send(descrição + "\n\n" + rodapé, delete_after = 30)
